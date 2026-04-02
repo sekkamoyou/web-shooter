@@ -80,6 +80,7 @@ export class Game {
     this.handlePointerDown = this.handlePointerDown.bind(this);
     this.handleKeyDown = this.handleKeyDown.bind(this);
     this.handleKeyUp = this.handleKeyUp.bind(this);
+    this.handleFullscreenChange = this.handleFullscreenChange.bind(this);
     this.handleStart = this.handleStart.bind(this);
     this.handleMobileStickPointerDown =
       this.handleMobileStickPointerDown.bind(this);
@@ -219,6 +220,7 @@ export class Game {
     });
 
     window.addEventListener("resize", this.handleResize);
+    document.addEventListener("fullscreenchange", this.handleFullscreenChange);
     window.addEventListener("pointerdown", this.handlePointerDown);
     window.addEventListener("keydown", this.handleKeyDown);
     window.addEventListener("keyup", this.handleKeyUp);
@@ -294,6 +296,26 @@ export class Game {
     this.handleOrientationState();
   }
 
+  handleFullscreenChange() {
+    if (!this.isMobile || document.fullscreenElement) {
+      return;
+    }
+
+    if (this.state === "running") {
+      this.mobilePortraitPaused = false;
+      this.state = "paused";
+      this.ui.configureScreen({
+        eyebrow: "FULLSCREEN OFF",
+        title: "전체화면이 종료되었습니다",
+        body:
+          "모바일 브라우저 UI가 다시 나타났습니다. 버튼을 눌러 전체화면으로 다시 들어가고 게임을 이어가세요.",
+        button: "전체화면으로 계속"
+      });
+    }
+
+    this.ui.setMobileControlsVisible(false);
+  }
+
   handlePointerDown(event) {
     if (this.isMobile) {
       return;
@@ -322,13 +344,14 @@ export class Game {
     this.player.setKey(event.code, false);
   }
 
-  handleStart() {
+  async handleStart() {
     if (this.state === "ended" || this.state === "menu") {
       this.resetRound();
     }
 
     if (this.isMobile) {
-      this.tryLockLandscape();
+      await this.tryEnterFullscreen();
+      await this.tryLockLandscape();
 
       if (!this.isLandscape()) {
         this.mobileStartQueued = true;
@@ -623,6 +646,31 @@ export class Game {
       await screen.orientation.lock("landscape");
     } catch {
       // Some mobile browsers only allow orientation lock in fullscreen or don't support it.
+    }
+  }
+
+  async tryEnterFullscreen() {
+    if (!this.isMobile || document.fullscreenElement) {
+      return;
+    }
+
+    const target = this.root;
+    const requestFullscreen =
+      target.requestFullscreen?.bind(target) ||
+      target.webkitRequestFullscreen?.bind(target);
+
+    if (!requestFullscreen) {
+      return;
+    }
+
+    try {
+      await requestFullscreen({ navigationUI: "hide" });
+    } catch {
+      try {
+        await requestFullscreen();
+      } catch {
+        // Some mobile browsers do not support fullscreen for arbitrary elements.
+      }
     }
   }
 }

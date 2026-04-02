@@ -20,6 +20,7 @@ body,
 }
 
 body {
+  min-height: 100dvh;
   overflow: hidden;
   font-family: "Trebuchet MS", "Segoe UI", sans-serif;
   color: $text-main;
@@ -36,6 +37,7 @@ canvas {
 
 #app {
   position: relative;
+  min-height: 100dvh;
 }
 
 .hud {
@@ -47,8 +49,8 @@ canvas {
 
 .hud__stats {
   position: absolute;
-  top: 1.2rem;
-  left: 1.2rem;
+  top: max(1.2rem, env(safe-area-inset-top));
+  left: max(1.2rem, env(safe-area-inset-left));
   display: flex;
   gap: 0.9rem;
   flex-wrap: wrap;
@@ -81,7 +83,7 @@ canvas {
 .hud__status {
   position: absolute;
   left: 50%;
-  bottom: 1.6rem;
+  bottom: max(1.6rem, env(safe-area-inset-bottom));
   transform: translateX(-50%);
   padding: 0.7rem 1rem;
   border-radius: 999px;
@@ -213,9 +215,9 @@ canvas {
 
 .mobile-controls__look-zone {
   position: absolute;
-  top: 0.75rem;
-  right: 0.75rem;
-  bottom: 6rem;
+  top: max(0.75rem, env(safe-area-inset-top));
+  right: max(0.75rem, env(safe-area-inset-right));
+  bottom: max(6rem, env(safe-area-inset-bottom) + 4.25rem);
   left: 42%;
   border: 1px dashed rgba(255, 255, 255, 0.12);
   border-radius: 24px;
@@ -235,8 +237,8 @@ canvas {
 
 .mobile-controls__move {
   position: absolute;
-  left: 1rem;
-  bottom: 1rem;
+  left: max(1rem, env(safe-area-inset-left));
+  bottom: max(1rem, env(safe-area-inset-bottom));
   width: 180px;
   height: 180px;
 }
@@ -275,8 +277,8 @@ canvas {
 
 .mobile-controls__actions {
   position: absolute;
-  right: 1rem;
-  bottom: 1rem;
+  right: max(1rem, env(safe-area-inset-right));
+  bottom: max(1rem, env(safe-area-inset-bottom));
   display: flex;
   align-items: flex-end;
   gap: 0.8rem;
@@ -352,8 +354,8 @@ canvas {
 
 @media (max-width: 640px) {
   .hud__stats {
-    top: 0.9rem;
-    left: 0.9rem;
+    top: max(0.9rem, env(safe-area-inset-top));
+    left: max(0.9rem, env(safe-area-inset-left));
     right: 0.9rem;
     gap: 0.55rem;
   }
@@ -366,7 +368,7 @@ canvas {
   .hud__status {
     left: 0.9rem;
     right: 0.9rem;
-    bottom: 1rem;
+    bottom: max(1rem, env(safe-area-inset-bottom));
     transform: none;
     text-align: center;
   }
