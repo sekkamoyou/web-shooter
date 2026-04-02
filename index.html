@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0"
+    />
+    <title>Target Rush FPS</title>
+    <script type="module" src="/src/main.js"></script>
+  </head>
+  <body>
+    <div id="app">
+      <div class="hud">
+        <div class="hud__stats">
+          <div class="hud__item">
+            <span class="hud__label">SCORE</span>
+            <strong class="hud__value" id="score">0</strong>
+          </div>
+          <div class="hud__item">
+            <span class="hud__label">TIME</span>
+            <strong class="hud__value" id="time">60.0</strong>
+          </div>
+          <div class="hud__item">
+            <span class="hud__label">AMMO</span>
+            <strong class="hud__value" id="ammo">30 / 30</strong>
+          </div>
+        </div>
+        <div class="hud__status" id="status">클릭해서 게임을 시작하세요</div>
+        <div class="crosshair" aria-hidden="true">
+          <span></span>
+          <span></span>
+        </div>
+      </div>
+
+      <div class="mobile-controls" id="mobile-controls" aria-hidden="true">
+        <div class="mobile-controls__look-zone" id="look-zone">
+          <span class="mobile-controls__look-label">DRAG TO AIM</span>
+        </div>
+
+        <div class="mobile-controls__move">
+          <div class="mobile-controls__stick-zone" id="stick-zone">
+            <div class="mobile-controls__stick-base">
+              <div class="mobile-controls__stick-knob" id="stick-knob"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="mobile-controls__actions">
+          <button
+            class="mobile-controls__button mobile-controls__button--fire"
+            id="fire-button"
+            type="button"
+          >
+            FIRE
+          </button>
+          <button
+            class="mobile-controls__button mobile-controls__button--reload"
+            id="reload-button"
+            type="button"
+          >
+            RLD
+          </button>
+        </div>
+      </div>
+
+      <div class="orientation-lock" id="orientation-lock">
+        <div class="orientation-lock__panel">
+          <p class="orientation-lock__eyebrow">MOBILE MODE</p>
+          <h2 class="orientation-lock__title">가로 모드로 돌려주세요</h2>
+          <p class="orientation-lock__body">
+            모바일에서는 landscape 화면에서만 플레이할 수 있습니다. 기기를 가로로 돌리면
+            자동으로 이어집니다.
+          </p>
+        </div>
+      </div>
+
+      <div class="screen screen--visible" id="screen">
+        <div class="screen__panel">
+          <p class="screen__eyebrow" id="screen-eyebrow">THREE.JS FPS</p>
+          <h1 class="screen__title" id="screen-title">Target Rush</h1>
+          <p class="screen__body" id="screen-body">
+            WASD로 이동하고 마우스로 조준하세요. 좌클릭으로 사격, R로 재장전합니다.
+            60초 동안 떠다니는 타겟을 최대한 많이 맞혀 보세요.
+          </p>
+          <button class="screen__button" id="screen-button" type="button">
+            게임 시작
+          </button>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
