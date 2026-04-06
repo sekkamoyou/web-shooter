@@ -12,7 +12,11 @@ export class Player {
     this.height = 1.7;
     this.radius = 0.45;
     this.moveSpeed = 10;
+    this.jumpVelocity = 5.6;
+    this.gravity = 16;
     this.movementAmount = 0;
+    this.verticalVelocity = 0;
+    this.isGrounded = true;
     this.obstacleBounds = [];
     this.joystick = {
       x: 0,
@@ -38,6 +42,8 @@ export class Player {
     this.camera.rotation.order = "YXZ";
     this.camera.rotation.set(0, 0, 0);
     this.movementAmount = 0;
+    this.verticalVelocity = 0;
+    this.isGrounded = true;
     this.clearInput();
     this.setJoystick(0, 0);
   }
@@ -92,7 +98,20 @@ export class Player {
       -this.arenaHalfSize,
       this.arenaHalfSize
     );
-    this.camera.position.y = this.height;
+
+    if (!this.isGrounded || this.verticalVelocity > 0) {
+      this.verticalVelocity -= this.gravity * deltaSeconds;
+    }
+
+    this.camera.position.y += this.verticalVelocity * deltaSeconds;
+
+    if (this.camera.position.y <= this.height) {
+      this.camera.position.y = this.height;
+      this.verticalVelocity = 0;
+      this.isGrounded = true;
+    } else {
+      this.isGrounded = false;
+    }
   }
 
   getPosition() {
@@ -101,6 +120,16 @@ export class Player {
 
   getMovementAmount() {
     return this.movementAmount;
+  }
+
+  jump() {
+    if (!this.isGrounded) {
+      return false;
+    }
+
+    this.verticalVelocity = this.jumpVelocity;
+    this.isGrounded = false;
+    return true;
   }
 
   tryMoveTo(nextX, nextZ) {

@@ -15,6 +15,7 @@ export class UI {
     this.stickKnob = root.querySelector("#stick-knob");
     this.lookZone = root.querySelector("#look-zone");
     this.fireButton = root.querySelector("#fire-button");
+    this.jumpButton = root.querySelector("#jump-button");
     this.reloadButton = root.querySelector("#reload-button");
     this.orientationLock = root.querySelector("#orientation-lock");
   }
@@ -40,8 +41,8 @@ export class UI {
       this.statusValue.textContent = isReloading
         ? "재장전 중..."
         : isMobile
-          ? "왼쪽 이동 / 오른쪽 조준 / FIRE 발사 / RLD 재장전"
-          : "좌클릭 사격 / R 재장전";
+          ? "왼쪽 이동 / 오른쪽 조준 / FIRE 발사 / JMP 점프 / RLD 재장전"
+          : "좌클릭 사격 / Space 점프 / R 재장전";
     }
   }
 
@@ -50,8 +51,8 @@ export class UI {
       eyebrow: "THREE.JS FPS",
       title: "Target Rush",
       body: isMobile
-        ? "왼쪽 조이스틱으로 이동하고 오른쪽 화면을 드래그해 조준하세요. FIRE로 사격하고 RLD로 재장전합니다. 가로 모드에서 시작하면 타겟 10개가 랜덤 위치에 나타납니다."
-        : "WASD로 이동하고 마우스로 조준하세요. 좌클릭으로 사격, R로 재장전합니다. 시작하면 타겟 10개가 랜덤 위치에 나타납니다.",
+        ? "왼쪽 조이스틱으로 이동하고 오른쪽 화면을 드래그해 조준하세요. FIRE로 사격하고 JMP로 점프, RLD로 재장전합니다. 가로 모드에서 시작하면 타겟 10개가 랜덤 위치에 나타납니다."
+        : "WASD로 이동하고 마우스로 조준하세요. 좌클릭으로 사격, Space로 점프, R로 재장전합니다. 시작하면 타겟 10개가 랜덤 위치에 나타납니다.",
       button: "게임 시작"
     });
   }

@@ -390,6 +390,13 @@ canvas {
   &__button {
     @extend %circular-action;
 
+    &--jump {
+      width: 78px;
+      height: 78px;
+      margin-bottom: 0.6rem;
+      background: radial-gradient(circle at 30% 30%, #9fe6a9, #2c8a56 72%);
+    }
+
     &--fire {
       width: 108px;
       height: 108px;
