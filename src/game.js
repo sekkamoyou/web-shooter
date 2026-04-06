@@ -20,6 +20,7 @@ import { PointerLockControls } from "three/examples/jsm/controls/PointerLockCont
 import { Player } from "./player.js";
 import { TargetManager } from "./targets.js";
 import { UI } from "./ui.js";
+import { FirstPersonWeapon } from "./firstPersonWeapon.js";
 import { Weapon } from "./weapon.js";
 
 const TARGET_COUNT = 10;
@@ -30,6 +31,7 @@ export class Game {
     this.scene = new Scene();
     this.scene.background = new Color("#87b6d8");
     this.scene.fog = new Fog("#87b6d8", 18, 82);
+    this.weaponScene = new Scene();
 
     this.camera = new PerspectiveCamera(
       75,
@@ -37,11 +39,19 @@ export class Game {
       0.1,
       200
     );
+    this.weaponCamera = new PerspectiveCamera(
+      50,
+      window.innerWidth / window.innerHeight,
+      0.01,
+      10
+    );
+    this.weaponCamera.rotation.order = "YXZ";
 
     this.renderer = new WebGLRenderer({ antialias: true });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.renderer.shadowMap.enabled = true;
+    this.renderer.autoClear = false;
 
     this.clock = new Clock();
     this.raycaster = new Raycaster();
@@ -67,6 +77,7 @@ export class Game {
     this.controls = new PointerLockControls(this.camera, document.body);
     this.player = new Player(this.camera, this.arenaHalfSize);
     this.weapon = new Weapon();
+    this.firstPersonWeapon = new FirstPersonWeapon(this.weaponCamera);
     this.obstacles = [];
     this.targetManager = new TargetManager(
       this.scene,
@@ -115,12 +126,19 @@ export class Game {
   setupWorld() {
     this.player.reset();
     this.scene.add(this.controls.object);
+    this.weaponScene.add(this.weaponCamera);
 
     const hemiLight = new HemisphereLight("#f9fbff", "#5d748d", 1.1);
     this.scene.add(hemiLight);
 
     const ambientLight = new AmbientLight("#ffffff", 0.42);
     this.scene.add(ambientLight);
+
+    const weaponAmbientLight = new AmbientLight("#ffffff", 1.1);
+    this.weaponScene.add(weaponAmbientLight);
+
+    const weaponFillLight = new HemisphereLight("#ffffff", "#5a6774", 1.35);
+    this.weaponScene.add(weaponFillLight);
 
     const sun = new DirectionalLight("#fff4cf", 1.2);
     sun.position.set(14, 24, 8);
@@ -287,6 +305,7 @@ export class Game {
     this.mobileStartQueued = false;
     this.releaseMobilePointers();
     this.weapon.reset();
+    this.firstPersonWeapon.reset();
     this.player.reset();
     this.targetManager.reset(this.player.getPosition());
     this.updateHud();
@@ -295,6 +314,8 @@ export class Game {
   handleResize() {
     this.camera.aspect = window.innerWidth / window.innerHeight;
     this.camera.updateProjectionMatrix();
+    this.weaponCamera.aspect = window.innerWidth / window.innerHeight;
+    this.weaponCamera.updateProjectionMatrix();
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.handleOrientationState();
@@ -339,6 +360,7 @@ export class Game {
       const reloadingStarted = this.weapon.requestReload();
 
       if (reloadingStarted) {
+        this.firstPersonWeapon.triggerReload(this.weapon.reloadDuration);
         this.updateHud();
       }
     }
@@ -468,6 +490,7 @@ export class Game {
 
     event.preventDefault();
     if (this.weapon.requestReload()) {
+      this.firstPersonWeapon.triggerReload(this.weapon.reloadDuration);
       this.updateHud();
     }
   }
@@ -524,7 +547,18 @@ export class Game {
       this.targetManager.update(deltaSeconds, this.player.getPosition(), false);
     }
 
+    this.firstPersonWeapon.update(
+      deltaSeconds,
+      this.state === "running" ? this.player.getMovementAmount() : 0
+    );
+
+    this.weaponCamera.quaternion.copy(this.camera.quaternion);
+    this.weaponCamera.position.set(0, 0, 0);
+
+    this.renderer.clear();
     this.renderer.render(this.scene, this.camera);
+    this.renderer.clearDepth();
+    this.renderer.render(this.weaponScene, this.weaponCamera);
   }
 
   fireShot() {
@@ -532,6 +566,12 @@ export class Game {
 
     if (!shot.fired) {
       return false;
+    }
+
+    this.firstPersonWeapon.triggerFire();
+
+    if (shot.autoReloaded) {
+      this.firstPersonWeapon.triggerReload(this.weapon.reloadDuration);
     }
 
     this.raycaster.setFromCamera(this.screenCenter, this.camera);

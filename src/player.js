@@ -12,6 +12,7 @@ export class Player {
     this.height = 1.7;
     this.radius = 0.45;
     this.moveSpeed = 10;
+    this.movementAmount = 0;
     this.obstacleBounds = [];
     this.joystick = {
       x: 0,
@@ -36,6 +37,7 @@ export class Player {
     this.camera.position.set(0, this.height, 14);
     this.camera.rotation.order = "YXZ";
     this.camera.rotation.set(0, 0, 0);
+    this.movementAmount = 0;
     this.clearInput();
     this.setJoystick(0, 0);
   }
@@ -62,6 +64,7 @@ export class Player {
     const keyboardZ = Number(this.keys.KeyW) - Number(this.keys.KeyS);
     const moveX = MathUtils.clamp(keyboardX + this.joystick.x, -1, 1);
     const moveZ = MathUtils.clamp(keyboardZ - this.joystick.y, -1, 1);
+    this.movementAmount = MathUtils.clamp(Math.hypot(moveX, moveZ), 0, 1);
 
     if (moveX !== 0 || moveZ !== 0) {
       const magnitude = Math.hypot(moveX, moveZ) || 1;
@@ -94,6 +97,10 @@ export class Player {
 
   getPosition() {
     return this.camera.position;
+  }
+
+  getMovementAmount() {
+    return this.movementAmount;
   }
 
   tryMoveTo(nextX, nextZ) {
