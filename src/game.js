@@ -190,6 +190,7 @@ export class Game {
     });
 
     this.scene.add(obstacleGroup);
+    this.player.setObstacles(this.obstacles);
     this.targetManager.setObstacles(this.obstacles);
   }
 

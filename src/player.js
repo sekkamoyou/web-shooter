@@ -1,15 +1,18 @@
-import { MathUtils, Vector3 } from "three";
+import { Box3, MathUtils, Vector3 } from "three";
 
 const FORWARD = new Vector3();
 const RIGHT = new Vector3();
 const WORLD_UP = new Vector3(0, 1, 0);
+const EXPANSION_VECTOR = new Vector3();
 
 export class Player {
   constructor(camera, arenaHalfSize) {
     this.camera = camera;
     this.arenaHalfSize = arenaHalfSize;
     this.height = 1.7;
+    this.radius = 0.45;
     this.moveSpeed = 10;
+    this.obstacleBounds = [];
     this.joystick = {
       x: 0,
       y: 0
@@ -20,6 +23,13 @@ export class Player {
       KeyS: false,
       KeyD: false
     };
+  }
+
+  setObstacles(obstacles) {
+    EXPANSION_VECTOR.set(this.radius, 0, this.radius);
+    this.obstacleBounds = obstacles.map((obstacle) =>
+      new Box3().setFromObject(obstacle).expandByVector(EXPANSION_VECTOR)
+    );
   }
 
   reset() {
@@ -60,8 +70,13 @@ export class Player {
       FORWARD.y = 0;
       FORWARD.normalize();
       RIGHT.crossVectors(FORWARD, WORLD_UP).normalize();
-      this.camera.position.addScaledVector(FORWARD, moveZ * step);
-      this.camera.position.addScaledVector(RIGHT, moveX * step);
+      const nextX =
+        this.camera.position.x + FORWARD.x * moveZ * step + RIGHT.x * moveX * step;
+      const nextZ =
+        this.camera.position.z + FORWARD.z * moveZ * step + RIGHT.z * moveX * step;
+
+      this.tryMoveTo(nextX, this.camera.position.z);
+      this.tryMoveTo(this.camera.position.x, nextZ);
     }
 
     this.camera.position.x = MathUtils.clamp(
@@ -79,5 +94,28 @@ export class Player {
 
   getPosition() {
     return this.camera.position;
+  }
+
+  tryMoveTo(nextX, nextZ) {
+    const clampedX = MathUtils.clamp(nextX, -this.arenaHalfSize, this.arenaHalfSize);
+    const clampedZ = MathUtils.clamp(nextZ, -this.arenaHalfSize, this.arenaHalfSize);
+
+    if (this.isBlocked(clampedX, clampedZ)) {
+      return;
+    }
+
+    this.camera.position.x = clampedX;
+    this.camera.position.z = clampedZ;
+  }
+
+  isBlocked(x, z) {
+    return this.obstacleBounds.some((bounds) => {
+      return (
+        x >= bounds.min.x &&
+        x <= bounds.max.x &&
+        z >= bounds.min.z &&
+        z <= bounds.max.z
+      );
+    });
   }
 }
