@@ -109,6 +109,7 @@ export class Game {
     this.handleMobileFirePointerDown =
       this.handleMobileFirePointerDown.bind(this);
     this.handleMobileFirePointerUp = this.handleMobileFirePointerUp.bind(this);
+    this.handleMobileJump = this.handleMobileJump.bind(this);
     this.handleMobileReload = this.handleMobileReload.bind(this);
     this.animate = this.animate.bind(this);
   }
@@ -293,6 +294,7 @@ export class Game {
       "pointercancel",
       this.handleMobileFirePointerUp
     );
+    this.ui.jumpButton?.addEventListener("pointerdown", this.handleMobileJump);
     this.ui.reloadButton?.addEventListener("pointerdown", this.handleMobileReload);
   }
 
@@ -354,6 +356,14 @@ export class Game {
   }
 
   handleKeyDown(event) {
+    if (event.code === "Space") {
+      event.preventDefault();
+
+      if (this.state === "running") {
+        this.player.jump();
+      }
+    }
+
     this.player.setKey(event.code, true);
 
     if (event.code === "KeyR" && this.state === "running") {
@@ -493,6 +503,15 @@ export class Game {
       this.firstPersonWeapon.triggerReload(this.weapon.reloadDuration);
       this.updateHud();
     }
+  }
+
+  handleMobileJump(event) {
+    if (!this.canUseMobileControls()) {
+      return;
+    }
+
+    event.preventDefault();
+    this.player.jump();
   }
 
   updateHud() {
