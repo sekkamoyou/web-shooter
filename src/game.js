@@ -123,6 +123,7 @@ export class Game {
   }
 
   mount() {
+    this.syncDeviceMode();
     this.root.prepend(this.renderer.domElement);
     this.setupWorld();
     this.bindEvents();
@@ -286,6 +287,7 @@ export class Game {
 
   bindEvents() {
     this.ui.bindStart(this.handleStart);
+    this.ui.bindLocaleChange();
 
     this.controls.addEventListener("lock", () => {
       if (this.isMobile) {
@@ -391,12 +393,20 @@ export class Game {
   }
 
   handleResize() {
+    const previousIsMobile = this.isMobile;
+    this.isMobile = this.detectMobile();
+    this.syncDeviceMode();
     this.camera.aspect = window.innerWidth / window.innerHeight;
     this.camera.updateProjectionMatrix();
     this.weaponCamera.aspect = window.innerWidth / window.innerHeight;
     this.weaponCamera.updateProjectionMatrix();
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+    if (this.state === "menu" && previousIsMobile !== this.isMobile) {
+      this.ui.showStart(this.isMobile);
+    }
+
     this.handleOrientationState();
   }
 
@@ -409,13 +419,7 @@ export class Game {
       this.mobilePortraitPaused = false;
       this.audio.reset();
       this.state = "paused";
-      this.ui.configureScreen({
-        eyebrow: "FULLSCREEN OFF",
-        title: "전체화면이 종료되었습니다",
-        body:
-          "모바일 브라우저 UI가 다시 나타났습니다. 버튼을 눌러 전체화면으로 다시 들어가고 게임을 이어가세요.",
-        button: "전체화면으로 계속"
-      });
+      this.ui.showFullscreenResume();
     }
 
     this.ui.setMobileControlsVisible(false);
@@ -719,6 +723,10 @@ export class Game {
       navigator.maxTouchPoints > 0 ||
       window.matchMedia("(pointer: coarse)").matches
     );
+  }
+
+  syncDeviceMode() {
+    this.root.classList.toggle("app--mobile", this.isMobile);
   }
 
   isLandscape() {
