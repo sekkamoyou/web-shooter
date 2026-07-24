@@ -59,7 +59,7 @@ export class UI {
     this.screenButton?.addEventListener("click", handler);
   }
 
-  bindLocaleChange(handler = () => {}) {
+  bindLocaleChange() {
     this.localeButtons.forEach((button) => {
       button.addEventListener("click", () => {
         const { locale } = button.dataset;
@@ -69,7 +69,6 @@ export class UI {
         }
 
         this.setLocale(locale);
-        handler(locale);
       });
     });
   }

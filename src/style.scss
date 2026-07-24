@@ -5,9 +5,7 @@ $panel-bg-solid: rgba(3, 23, 36, 0.92);
 $panel-border: rgba(121, 212, 255, 0.2);
 $panel-border-soft: rgba(121, 212, 255, 0.14);
 $glass-bg: rgba(3, 30, 46, 0.68);
-$glass-bg-strong: rgba(3, 30, 46, 0.76);
 $glass-border: rgba(121, 212, 255, 0.16);
-$glass-border-soft: rgba(121, 212, 255, 0.12);
 $accent: #0086cc;
 $accent-soft: #79d4ff;
 $text-main: #f2fbff;
@@ -39,11 +37,6 @@ $knob-shadow:
   z-index: $z-index;
 }
 
-@mixin safe-area-top-left($top, $left) {
-  top: max($top, env(safe-area-inset-top));
-  left: max($left, env(safe-area-inset-left));
-}
-
 @mixin overlay-panel(
   $width,
   $padding,
@@ -64,13 +57,6 @@ $knob-shadow:
   @media (max-width: 640px) {
     @content;
   }
-}
-
-%glass-card {
-  border: 1px solid $glass-border;
-  background: $glass-bg;
-  box-shadow: $card-shadow;
-  backdrop-filter: blur(10px);
 }
 
 %eyebrow-text {
@@ -737,8 +723,6 @@ canvas {
   }
 
   .screen__panel--fullscreen .screen__actions {
-    // display: grid;
-    // grid-template-columns: minmax(0, 1fr) auto;
     display: flex;
     flex-flow: row nowrap;
     align-items: stretch;

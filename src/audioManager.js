@@ -1,4 +1,5 @@
 import { assetPath } from "./assetPath.js";
+import { randomBetween } from "./random.js";
 
 const SOUND_BANK = {
   footstep: {
@@ -37,10 +38,6 @@ const SOUND_BANK = {
     playbackRateRange: [0.96, 1.04]
   }
 };
-
-function randomBetween(min, max) {
-  return min + Math.random() * (max - min);
-}
 
 export class AudioManager {
   constructor() {

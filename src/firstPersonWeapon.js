@@ -1,7 +1,6 @@
 import {
   Box3,
   CylinderGeometry,
-  Euler,
   Group,
   MathUtils,
   Mesh,
@@ -13,23 +12,12 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { assetPath } from "./assetPath.js";
 
 const MODEL_PATHS = {
-  pistol: assetPath("models/weapons/p320.glb"),
-  suppressor: assetPath("models/weapons/suppressor.glb"),
-  redDot: assetPath("models/weapons/red-dot.glb"),
-  flashlight: assetPath("models/weapons/flashlight.glb")
+  pistol: assetPath("models/weapons/p320.glb")
 };
 
 const TEMP_BOX = new Box3();
 const TEMP_SIZE = new Vector3();
 const TEMP_CENTER = new Vector3();
-
-function easeInOutCubic(value) {
-  if (value < 0.5) {
-    return 4 * value * value * value;
-  }
-
-  return 1 - Math.pow(-2 * value + 2, 3) / 2;
-}
 
 function scaleObjectToDepth(object, targetDepth) {
   TEMP_BOX.setFromObject(object);
@@ -85,7 +73,6 @@ export class FirstPersonWeapon {
     this.reloadTimer = 0;
     this.reloadDuration = 0;
     this.isReloading = false;
-    this.isReady = false;
 
     this.root = new Group();
     this.root.position.set(
@@ -107,13 +94,6 @@ export class FirstPersonWeapon {
     this.weaponPivot.add(this.weaponGroup);
 
     this.pistol = null;
-    this.suppressor = null;
-    this.redDot = null;
-    this.flashlight = null;
-    this.magazine = null;
-    this.showMagazine = false;
-    this.magazineBasePosition = new Vector3();
-    this.magazineBaseRotation = new Euler();
     this.weaponPivotBasePosition = new Vector3();
     this.weaponGroupBasePosition = new Vector3();
     this.muzzleFlash = this.createMuzzleFlash();
@@ -125,20 +105,13 @@ export class FirstPersonWeapon {
 
   async loadAssets() {
     try {
-      const pistol = await this.loadModel(MODEL_PATHS.pistol);
+      const pistol = await this.loader.loadAsync(MODEL_PATHS.pistol);
 
       this.assembleWeapon(pistol.scene);
-      this.isReady = true;
       this.reset();
     } catch (error) {
       console.error("Failed to load first-person weapon assets.", error);
     }
-  }
-
-  loadModel(path) {
-    return new Promise((resolve, reject) => {
-      this.loader.load(path, resolve, undefined, reject);
-    });
   }
 
   createMuzzleFlash() {
@@ -184,10 +157,6 @@ export class FirstPersonWeapon {
 
   assembleWeapon(pistolScene) {
     this.pistol = pistolScene;
-    this.suppressor = null;
-    this.redDot = null;
-    this.flashlight = null;
-
     this.prepareImportedObject(this.pistol);
     this.weaponGroup.add(this.pistol);
 
@@ -201,14 +170,6 @@ export class FirstPersonWeapon {
       -TEMP_BOX.max.z + 0.11
     );
     this.pistol.updateMatrixWorld(true);
-
-    this.magazine = this.pistol.getObjectByName("Magazine");
-
-    if (this.magazine) {
-      this.magazine.visible = this.showMagazine;
-      this.magazineBasePosition.copy(this.magazine.position);
-      this.magazineBaseRotation.copy(this.magazine.rotation);
-    }
 
     this.positionAttachments();
     this.configureReloadPivot();
@@ -266,11 +227,6 @@ export class FirstPersonWeapon {
     this.weaponPivot.rotation.set(0, 0, 0);
     this.weaponGroup.position.copy(this.weaponGroupBasePosition);
 
-    if (this.magazine) {
-      this.magazine.visible = this.showMagazine;
-      this.magazine.position.copy(this.magazineBasePosition);
-      this.magazine.rotation.copy(this.magazineBaseRotation);
-    }
   }
 
   triggerFire() {
@@ -300,68 +256,37 @@ export class FirstPersonWeapon {
       }
     }
 
-    const walkBobX = 0;
-    const walkBobY = 0;
     const idleSwayX = Math.sin(this.walkTime * 0.55) * 0.004;
     const idleSwayY = Math.cos(this.walkTime * 0.42) * 0.004;
     const recoilOffset = this.recoil * 0.055;
     const recoilLift = this.recoil * 0.018;
 
     let reloadTilt = 0;
-    let reloadYaw = 0;
     let reloadRoll = 0;
-    let reloadShiftX = 0;
-    let reloadShiftY = 0;
-    let reloadShiftZ = 0;
-    let magazineDrop = 0;
-    let magazineYaw = 0;
 
     if (this.isReloading) {
       const progress = this.reloadTimer / this.reloadDuration;
       const posePhase = Math.sin(progress * Math.PI);
-      const dropPhase = Math.sin(Math.min(progress, 0.75) / 0.75 * Math.PI);
-      const insertPhase = progress > 0.45 ? (progress - 0.45) / 0.55 : 0;
-      const insertEase = easeInOutCubic(Math.min(insertPhase, 1));
 
-      // Keep the weapon anchored in place during reload and only raise the muzzle.
       reloadTilt = posePhase * 0.34;
-      reloadYaw = 0;
       reloadRoll = posePhase * -0.32;
-      reloadShiftX = 0;
-      reloadShiftY = 0;
-      reloadShiftZ = 0;
-      magazineDrop = dropPhase * 0.34 - insertEase * 0.05;
-      magazineYaw = dropPhase * 0.12 - insertEase * 0.04;
     }
 
     this.root.position.set(
-      this.basePosition.x + walkBobX + idleSwayX + reloadShiftX,
-      this.basePosition.y - walkBobY + idleSwayY + recoilLift + reloadShiftY,
-      this.basePosition.z + recoilOffset + reloadShiftZ
+      this.basePosition.x + idleSwayX,
+      this.basePosition.y + idleSwayY + recoilLift,
+      this.basePosition.z + recoilOffset
     );
 
     this.root.rotation.set(
-      this.baseRotation.x - walkBobY * 0.6,
-      this.baseRotation.y + walkBobX * 0.8,
-      this.baseRotation.z - walkBobX * 0.9
+      this.baseRotation.x,
+      this.baseRotation.y,
+      this.baseRotation.z
     );
 
     this.weaponPivot.position.copy(this.weaponPivotBasePosition);
     this.weaponGroup.position.copy(this.weaponGroupBasePosition);
-    this.weaponPivot.rotation.set(reloadTilt, reloadYaw, reloadRoll);
-
-    if (this.magazine) {
-      this.magazine.position.set(
-        this.magazineBasePosition.x - magazineYaw * 0.015,
-        this.magazineBasePosition.y - magazineDrop,
-        this.magazineBasePosition.z + magazineDrop * 0.08
-      );
-      this.magazine.rotation.set(
-        this.magazineBaseRotation.x + magazineDrop * 0.5,
-        this.magazineBaseRotation.y + magazineYaw,
-        this.magazineBaseRotation.z
-      );
-    }
+    this.weaponPivot.rotation.set(reloadTilt, 0, reloadRoll);
 
     const flashVisible = this.flash > 0.08;
     this.muzzleFlash.visible = flashVisible;

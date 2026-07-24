@@ -377,7 +377,10 @@ export class TargetManager {
         .addScaledVector(forward, distance)
         .addScaledVector(TEMP_SIDE, sideOffset);
 
-      if (this.isSpawnPositionClear(candidate, playerPosition, targetRadius)) {
+      if (
+        this.isWithinArena(candidate) &&
+        this.isSpawnPositionClear(candidate, playerPosition, targetRadius)
+      ) {
         const jiggleDirection =
           sideOffset === 0
             ? TEMP_SIDE.clone().multiplyScalar(Math.random() > 0.5 ? 1 : -1)
@@ -422,13 +425,15 @@ export class TargetManager {
       }
     }
 
+    const candidate = playerPosition
+      .clone()
+      .add(forward.clone().multiplyScalar(10).setY(-playerPosition.y));
+    candidate.x = Math.max(-this.arenaHalfSize + margin, Math.min(this.arenaHalfSize - margin, candidate.x));
+    candidate.z = Math.max(-this.arenaHalfSize + margin, Math.min(this.arenaHalfSize - margin, candidate.z));
+
     return {
-      hiddenPosition: playerPosition.clone().add(
-        forward.clone().multiplyScalar(10).setY(-playerPosition.y)
-      ),
-      peekPosition: playerPosition.clone().add(
-        forward.clone().multiplyScalar(10).setY(-playerPosition.y)
-      ),
+      hiddenPosition: candidate.clone(),
+      peekPosition: candidate,
       jiggleDirection: TEMP_SIDE.clone()
     };
   }

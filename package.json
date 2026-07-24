@@ -6,13 +6,15 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "build:inho": "BASE_PATH=/999-999_uk-game/inho/ vite build",
+    "preview": "vite preview",
+    "test": "node --test"
   },
   "dependencies": {
     "three": "^0.179.1"
   },
   "devDependencies": {
     "sass": "^1.89.0",
-    "vite": "^7.0.0"
+    "vite": "^7.3.6"
   }
 }

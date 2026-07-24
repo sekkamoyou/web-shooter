@@ -237,11 +237,7 @@ export class Game {
     return obstacles;
   }
 
-  refreshObstacles(material = null) {
-    if (material) {
-      this.obstacleMaterial = material;
-    }
-
+  refreshObstacles() {
     if (!this.obstacleMaterial) {
       return;
     }
@@ -422,6 +418,7 @@ export class Game {
       this.ui.showFullscreenResume();
     }
 
+    this.mobileFireHeld = false;
     this.ui.setMobileControlsVisible(false);
   }
 
@@ -571,6 +568,7 @@ export class Game {
 
     event.preventDefault();
     this.audio.unlock();
+    this.ui.fireButton?.setPointerCapture(event.pointerId);
     this.mobileFireHeld = true;
     this.fireShot();
   }
@@ -796,6 +794,7 @@ export class Game {
 
     this.ui.showOrientationLock();
     this.ui.setMobileControlsVisible(false);
+    this.mobileFireHeld = false;
 
     if (this.state === "running") {
       this.mobilePortraitPaused = true;
