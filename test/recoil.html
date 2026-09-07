@@ -1,0 +1,26 @@
+<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Recoil comparison</title>
+<style>body{margin:0;background:#454d51;color:#eee;font:14px sans-serif;overflow:hidden}nav{position:fixed;z-index:2;top:10px;left:10px;display:flex;flex-wrap:wrap;gap:6px}button,select{padding:9px}output{position:fixed;bottom:12px;left:12px}</style>
+<nav><select id="version" aria-label="Recoil version"><option value="tuned">수정 반동 · 0.22s</option><option value="original">원본 반동 · 1.15s</option></select><button id="fire">단발</button><button id="burst">연속 5발</button><button id="reload">재장전</button><button id="idle">기본 자세</button><button data-time="0.02">20ms</button><button data-time="0.045">45ms</button><button data-time="0.09">90ms</button><button data-time="0.22">220ms</button><button data-time="0.5">500ms</button></nav><output>Loading…</output>
+<script type="module">
+import {Scene,PerspectiveCamera,WebGLRenderer,HemisphereLight,DirectionalLight,ACESFilmicToneMapping,Color} from 'three';
+import {GLTFLoader} from 'three/examples/jsm/loaders/GLTFLoader.js';
+import {FirstPersonWeapon} from '../src/firstPersonWeapon.js';
+const scene=new Scene(); scene.background=new Color('#454d51');
+const camera=new PerspectiveCamera(50,innerWidth/innerHeight,.01,100); scene.add(camera);
+const renderer=new WebGLRenderer({antialias:true}); renderer.setSize(innerWidth,innerHeight); renderer.setPixelRatio(Math.min(devicePixelRatio,2)); renderer.toneMapping=ACESFilmicToneMapping; document.body.append(renderer.domElement);
+scene.add(new HemisphereLight('#e1e9ee','#82735b',1.7)); const key=new DirectionalLight('#ffe3bd',2.2); key.position.set(2,3,2); scene.add(key);
+const asset=await new GLTFLoader().loadAsync('../models/weapons/animated-pistol/scene.gltf');
+const weapon=new FirstPersonWeapon(camera); weapon.assembleWeapon(asset);
+const tuned=weapon.actions.fire, original=weapon.mixer.clipAction(asset.animations.find(c=>c.name==='Pistol_FIRE'));
+let frozen=false,elapsed=0,shots=0,nextShot=0,last=performance.now();
+const output=document.querySelector('output');
+function reset(){weapon.mixer.stopAllAction();weapon.actions.fire=document.querySelector('#version').value==='tuned'?tuned:original;weapon.reset();frozen=false;elapsed=0;shots=0;}
+document.querySelector('#version').onchange=reset;
+document.querySelector('#idle').onclick=reset;
+document.querySelector('#fire').onclick=()=>{reset();weapon.triggerFire();};
+document.querySelector('#burst').onclick=()=>{reset();weapon.triggerFire();shots=4;nextShot=.12;};
+document.querySelector('#reload').onclick=()=>{reset();weapon.triggerReload();};
+for(const button of document.querySelectorAll('[data-time]')) button.onclick=()=>{reset();weapon.triggerFire();elapsed=Number(button.dataset.time);weapon.update(elapsed);frozen=true;};
+function frame(){requestAnimationFrame(frame);const now=performance.now(),dt=Math.min((now-last)/1000,.05);last=now;if(!frozen){elapsed+=dt;if(shots&&elapsed>=nextShot){weapon.triggerFire();shots--;nextShot+=.12;}weapon.update(dt);}renderer.render(scene,camera);output.textContent=`${document.querySelector('#version').selectedOptions[0].textContent} · ${elapsed.toFixed(3)}s · ${weapon.actionName}${frozen?' · 정지':''}`;}frame();
+window.addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);});
+</script></html>

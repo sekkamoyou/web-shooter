@@ -8,6 +8,10 @@ import {
 export class UI {
   constructor(root) {
     this.root = root;
+    this.assetState = "ready";
+    this.pointerLockError = false;
+    this.screenVisible = true;
+    this.hitTimer = null;
     this.locale = getStoredLocale();
     this.messages = getTranslations(this.locale);
     this.scoreValue = root.querySelector("#score");
@@ -23,6 +27,8 @@ export class UI {
     this.screenTitle = root.querySelector("#screen-title");
     this.screenBody = root.querySelector("#screen-body");
     this.screenButton = root.querySelector("#screen-button");
+    this.screenNotice = root.querySelector("#screen-notice");
+    this.hitmarker = root.querySelector("#hitmarker");
     this.screenLocale = root.querySelector("#screen-locale");
     this.localeLabel = root.querySelector("#locale-label");
     this.localeButtons = Array.from(root.querySelectorAll("[data-locale]"));
@@ -107,6 +113,9 @@ export class UI {
   }
 
   showStart(isMobile) {
+    this.screenVisible = true;
+    this.pointerLockError = false;
+    this.setRunning(false);
     this.screenState = {
       type: "start",
       isMobile
@@ -117,6 +126,9 @@ export class UI {
   }
 
   showPause() {
+    this.screenVisible = true;
+    this.pointerLockError = false;
+    this.setRunning(false);
     this.screenState = {
       type: "pause"
     };
@@ -126,6 +138,9 @@ export class UI {
   }
 
   showEnd(score) {
+    this.screenVisible = true;
+    this.pointerLockError = false;
+    this.setRunning(false);
     this.screenState = {
       type: "end",
       score
@@ -136,6 +151,9 @@ export class UI {
   }
 
   showFullscreenResume() {
+    this.screenVisible = true;
+    this.pointerLockError = false;
+    this.setRunning(false);
     this.screenState = {
       type: "fullscreenResume"
     };
@@ -145,19 +163,54 @@ export class UI {
   }
 
   hideScreen() {
+    this.screenVisible = false;
+    this.pointerLockError = false;
     this.screen?.classList.remove("screen--visible");
+    this.screen?.setAttribute("aria-hidden", "true");
+  }
+
+  setRunning(running) {
+    this.root.classList.toggle("app--running", running);
+    this.root.querySelector(".hud")?.setAttribute("aria-hidden", String(!running));
+    if (!running) {
+      clearTimeout(this.hitTimer);
+      this.hitmarker?.classList.remove("hitmarker--visible");
+    }
+  }
+
+  setAssetState(state) {
+    this.assetState = state;
+    this.renderScreen();
+  }
+
+  showPointerLockError() {
+    this.pointerLockError = true;
+    this.screenVisible = true;
+    this.setRunning(false);
+    this.renderScreen();
+  }
+
+  flashHit() {
+    clearTimeout(this.hitTimer);
+    this.hitmarker?.classList.add("hitmarker--visible");
+    this.hitTimer = setTimeout(() => {
+      this.hitmarker?.classList.remove("hitmarker--visible");
+    }, 110);
   }
 
   setMobileControlsVisible(visible) {
     this.mobileControls?.classList.toggle("mobile-controls--visible", visible);
+    this.mobileControls?.setAttribute("aria-hidden", String(!visible));
   }
 
   showOrientationLock() {
     this.orientationLock?.classList.add("orientation-lock--visible");
+    this.orientationLock?.setAttribute("aria-hidden", "false");
   }
 
   hideOrientationLock() {
     this.orientationLock?.classList.remove("orientation-lock--visible");
+    this.orientationLock?.setAttribute("aria-hidden", "true");
   }
 
   resetStick() {
@@ -201,6 +254,8 @@ export class UI {
     if (!this.statusValue) {
       return;
     }
+
+    this.statusValue.classList.toggle("hud__status--reloading", this.statusMode === "running" && this.hudState.isReloading);
 
     if (this.statusMode === "running") {
       this.statusValue.textContent = this.hudState.isReloading
@@ -338,7 +393,18 @@ export class UI {
     }
 
     if (this.screenButton) {
-      this.screenButton.textContent = button;
+      this.screenButton.disabled = this.assetState === "loading";
+      this.screenButton.textContent = this.assetState === "loading"
+        ? this.messages.screen.loadingButton
+        : this.assetState === "error" ? this.messages.screen.retryButton : button;
+    }
+
+    if (this.screenNotice) {
+      this.screenNotice.textContent = this.assetState === "loading"
+        ? this.messages.screen.loading
+        : this.assetState === "error" ? this.messages.screen.loadError
+          : this.pointerLockError ? this.messages.screen.pointerLockError : "";
+      this.screenNotice.hidden = !this.screenNotice.textContent;
     }
 
     this.screenLocale?.classList.toggle(
@@ -351,6 +417,7 @@ export class UI {
       "screen__panel--overlay",
       panelMode === "overlay"
     );
-    this.screen?.classList.add("screen--visible");
+    this.screen?.classList.toggle("screen--visible", this.screenVisible);
+    this.screen?.setAttribute("aria-hidden", String(!this.screenVisible));
   }
 }

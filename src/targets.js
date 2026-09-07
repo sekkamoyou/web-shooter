@@ -1,13 +1,16 @@
 import {
   Box3,
-  Color,
   CylinderGeometry,
+  RingGeometry,
+  CircleGeometry,
+  MeshBasicMaterial,
   Group,
   Mesh,
   MeshStandardMaterial,
   SphereGeometry,
   Vector3
 } from "three";
+import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
 import { randomBetween } from "./random.js";
 
 const DEFAULT_FORWARD = new Vector3(0, 0, -1);
@@ -34,6 +37,14 @@ export class TargetManager {
     this.targets = [];
     this.pendingRespawns = [];
     this.obstacles = [];
+    this.surfaces = [];
+    this.colliderMaterial = new MeshBasicMaterial({ visible: false });
+    this.bodyVisualGeometry = new RoundedBoxGeometry(0.78, 1.65, 0.76, 2, 0.16);
+    this.headVisualGeometry = new RoundedBoxGeometry(0.78, 0.84, 0.72, 2, 0.24);
+    this.targetMaterial = new MeshStandardMaterial({ color: "#c6bda0", roughness: 0.78, metalness: 0.35 });
+    this.markMaterial = new MeshBasicMaterial({ color: "#322f27" });
+    this.ringGeometry = new RingGeometry(0.225, 0.244, 40);
+    this.centerGeometry = new CircleGeometry(0.07, 24);
     this.obstacleBounds = [];
   }
 
@@ -97,9 +108,14 @@ export class TargetManager {
   handleShot(raycaster) {
     const colliders = [
       ...this.obstacles,
-      ...this.targets.map((target) => target.group)
+      ...this.targets.flatMap((target) => target.parts),
+      ...this.surfaces.flatMap((surface) => {
+        const meshes = [];
+        surface.traverse((node) => { if (node.isMesh) meshes.push(node); });
+        return meshes;
+      })
     ];
-    const hit = raycaster.intersectObjects(colliders, true)[0];
+    const hit = raycaster.intersectObjects(colliders, false)[0];
 
     if (!hit) {
       return null;
@@ -110,7 +126,7 @@ export class TargetManager {
     );
 
     if (targetIndex === -1) {
-      return null;
+      return { points: 0, point: hit.point, surface: hit.object.userData.surface ?? "concrete" };
     }
 
     const [target] = this.targets.splice(targetIndex, 1);
@@ -118,13 +134,13 @@ export class TargetManager {
     this.pendingRespawns.push(this.respawnDelay);
 
     return {
-      points: 100
+      points: 100, point: hit.point, surface: "metal"
     };
   }
 
   spawnTarget(playerPosition, playerForward) {
     const placement = this.findSpawnPlacement(playerPosition, playerForward);
-    const material = this.createTargetMaterial();
+    const material = this.colliderMaterial;
 
     const body = new Mesh(this.bodyGeometry, material);
     body.position.y =
@@ -145,6 +161,18 @@ export class TargetManager {
     group.position.copy(placement.hiddenPosition);
     group.add(body);
     group.add(head);
+    const bodyVisual = new Mesh(this.bodyVisualGeometry, this.targetMaterial);
+    bodyVisual.position.copy(body.position);
+    const headVisual = new Mesh(this.headVisualGeometry, this.targetMaterial);
+    headVisual.position.copy(head.position);
+    bodyVisual.castShadow = headVisual.castShadow = true;
+    bodyVisual.receiveShadow = headVisual.receiveShadow = true;
+    group.add(bodyVisual, headVisual);
+    const ring = new Mesh(this.ringGeometry, this.markMaterial);
+    ring.position.set(0, 1.12, 0.386);
+    const center = new Mesh(this.centerGeometry, this.markMaterial);
+    center.position.copy(ring.position);
+    group.add(ring, center);
 
     this.scene.add(group);
     const target = {
@@ -162,19 +190,9 @@ export class TargetManager {
     this.targets.push(target);
   }
 
-  createTargetMaterial() {
-    const hue = randomBetween(0.02, 0.11);
-    return new MeshStandardMaterial({
-      color: new Color().setHSL(hue, 0.85, 0.56),
-      emissive: new Color().setHSL(hue, 0.82, 0.2),
-      roughness: 0.28,
-      metalness: 0.14
-    });
-  }
-
   removeTarget(target) {
+    // Geometry/materials belong to the manager and are shared by respawns.
     this.scene.remove(target.group);
-    target.parts[0].material.dispose();
   }
 
   updateTargetMotion(target, deltaSeconds, playerPosition) {

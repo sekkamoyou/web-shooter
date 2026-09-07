@@ -1,16 +1,14 @@
 import {
-  AmbientLight,
   BoxGeometry,
   Clock,
   Color,
-  DirectionalLight,
   Fog,
   Group,
-  HemisphereLight,
   Mesh,
-  MeshStandardMaterial,
+  MeshBasicMaterial,
+  ACESFilmicToneMapping,
+  PCFSoftShadowMap,
   PerspectiveCamera,
-  PlaneGeometry,
   Raycaster,
   Scene,
   Vector3,
@@ -25,6 +23,7 @@ import { FirstPersonWeapon } from "./firstPersonWeapon.js";
 import { Weapon } from "./weapon.js";
 import { randomBetween } from "./random.js";
 import { AudioManager } from "./audioManager.js";
+import { Arena } from "./arena.js";
 
 const TARGET_COUNT = 6;
 const OBSTACLE_COUNT = 6;
@@ -56,6 +55,9 @@ export class Game {
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.renderer.shadowMap.enabled = true;
     this.renderer.autoClear = false;
+    this.renderer.toneMapping = ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = 1;
+    this.renderer.shadowMap.type = PCFSoftShadowMap;
 
     this.clock = new Clock();
     this.raycaster = new Raycaster();
@@ -65,6 +67,8 @@ export class Game {
     this.timeLimit = 60;
     this.state = "menu";
     this.awaitingLock = false;
+    this.assetsReady = false;
+    this.assetPromise = null;
     this.isMobile = this.detectMobile();
     this.mobileLookSensitivity = 0.004;
     this.mobilePortraitPaused = false;
@@ -131,6 +135,7 @@ export class Game {
     this.ui.showStart(this.isMobile);
     this.syncMobilePresentation();
     this.animate();
+    this.prepareAssets();
   }
 
   setupWorld() {
@@ -138,68 +143,29 @@ export class Game {
     this.scene.add(this.controls.object);
     this.weaponScene.add(this.weaponCamera);
 
-    const hemiLight = new HemisphereLight("#f9fbff", "#5d748d", 1.1);
-    this.scene.add(hemiLight);
-
-    const ambientLight = new AmbientLight("#ffffff", 0.42);
-    this.scene.add(ambientLight);
-
-    const weaponAmbientLight = new AmbientLight("#ffffff", 1.1);
-    this.weaponScene.add(weaponAmbientLight);
-
-    const weaponFillLight = new HemisphereLight("#ffffff", "#5a6774", 1.35);
-    this.weaponScene.add(weaponFillLight);
-
-    const sun = new DirectionalLight("#fff4cf", 1.2);
-    sun.position.set(14, 24, 8);
-    sun.castShadow = true;
-    sun.shadow.mapSize.set(1024, 1024);
-    sun.shadow.camera.left = -30;
-    sun.shadow.camera.right = 30;
-    sun.shadow.camera.top = 30;
-    sun.shadow.camera.bottom = -30;
-    this.scene.add(sun);
-
-    const floor = new Mesh(
-      new PlaneGeometry(120, 120),
-      new MeshStandardMaterial({
-        color: "#2a3b49",
-        roughness: 0.94,
-        metalness: 0.06
-      })
-    );
-    floor.rotation.x = -Math.PI / 2;
-    floor.receiveShadow = true;
-    this.scene.add(floor);
-
-    const wallMaterial = new MeshStandardMaterial({
-      color: "#506979",
-      roughness: 0.88,
-      metalness: 0.08
-    });
-    const wallGeometry = new BoxGeometry(48, 7, 1.2);
-    const sideGeometry = new BoxGeometry(1.2, 7, 48);
-    const walls = [
-      { geometry: wallGeometry, position: [0, 3.5, -24] },
-      { geometry: wallGeometry, position: [0, 3.5, 24] },
-      { geometry: sideGeometry, position: [-24, 3.5, 0] },
-      { geometry: sideGeometry, position: [24, 3.5, 0] }
-    ];
-
-    walls.forEach(({ geometry, position }) => {
-      const wall = new Mesh(geometry, wallMaterial);
-      wall.position.set(...position);
-      wall.castShadow = true;
-      wall.receiveShadow = true;
-      this.scene.add(wall);
-    });
-
-    this.obstacleMaterial = new MeshStandardMaterial({
-      color: "#e5aa51",
-      roughness: 0.7,
-      metalness: 0.12
-    });
+    this.arena = new Arena(this.scene, this.weaponScene, this.renderer);
+    this.obstacleMaterial = new MeshBasicMaterial({ visible: false });
     this.scene.add(this.obstacleGroup);
+  }
+
+  async prepareAssets() {
+    if (this.assetPromise) return this.assetPromise;
+    this.ui.setAssetState("loading");
+    this.assetPromise = Promise.allSettled([
+      this.arena.loadAssets(), this.firstPersonWeapon.loadAssets()
+    ]).then((results) => {
+      const failure = results.find((result) => result.status === "rejected");
+      if (failure) throw failure.reason;
+      this.assetsReady = true;
+      this.targetManager.surfaces = this.arena.surfaces;
+      this.ui.setAssetState("ready");
+      return true;
+    }).catch((error) => {
+      console.error("Unable to prepare visual assets", error);
+      this.ui.setAssetState("error");
+      return false;
+    }).finally(() => { this.assetPromise = null; });
+    return this.assetPromise;
   }
 
   createRandomObstacles(material) {
@@ -248,6 +214,7 @@ export class Game {
     this.obstacles.forEach((obstacle) => {
       this.obstacleGroup.add(obstacle);
     });
+    this.arena.refreshObstacles(this.obstacles);
     this.player.setObstacles(this.obstacles);
     this.targetManager.setObstacles(this.obstacles);
   }
@@ -295,6 +262,8 @@ export class Game {
         this.state = "running";
         this.clock.getDelta();
         this.ui.hideScreen();
+        this.ui.setRunning(true);
+        this.audio.resume();
       }
     });
 
@@ -306,12 +275,21 @@ export class Game {
       this.player.clearInput();
 
       if (this.state === "running") {
-        this.audio.reset();
+        this.audio.pause();
         this.state = "paused";
+        this.ui.setRunning(false);
         this.ui.showPause();
       }
     });
 
+    document.addEventListener("pointerlockerror", () => {
+      this.awaitingLock = false;
+      this.ui.showPointerLockError();
+    });
+    window.addEventListener("blur", () => this.pauseForInterruption());
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) this.pauseForInterruption();
+    });
     window.addEventListener("resize", this.handleResize);
     document.addEventListener("fullscreenchange", this.handleFullscreenChange);
     window.addEventListener("pointerdown", this.handlePointerDown);
@@ -372,6 +350,7 @@ export class Game {
     this.score = 0;
     this.timeLeft = this.timeLimit;
     this.state = "menu";
+    this.ui.setRunning(false);
     this.mobileFireHeld = false;
     this.mobilePortraitPaused = false;
     this.mobileStartQueued = false;
@@ -392,6 +371,7 @@ export class Game {
     const previousIsMobile = this.isMobile;
     this.isMobile = this.detectMobile();
     this.syncDeviceMode();
+    if (previousIsMobile !== this.isMobile) this.pauseForInterruption();
     this.camera.aspect = window.innerWidth / window.innerHeight;
     this.camera.updateProjectionMatrix();
     this.weaponCamera.aspect = window.innerWidth / window.innerHeight;
@@ -413,8 +393,11 @@ export class Game {
 
     if (this.state === "running") {
       this.mobilePortraitPaused = false;
-      this.audio.reset();
+      this.audio.pause();
       this.state = "paused";
+      this.ui.setRunning(false);
+      this.player.clearInput();
+      this.releaseMobilePointers();
       this.ui.showFullscreenResume();
     }
 
@@ -462,7 +445,15 @@ export class Game {
   }
 
   async handleStart() {
-    await this.audio.unlock();
+    if (this.state === "running" || this.awaitingLock) return;
+    if (!this.assetsReady) {
+      await this.prepareAssets();
+      return;
+    }
+    // A paused reload resumes only after the game actually resumes.
+    // Keep fullscreen/pointer lock in the click's user-activation window.
+    if (this.state !== "paused") this.audio.unlock();
+    else void this.audio.ensureBuffers();
 
     if (this.state === "ended" || this.state === "menu") {
       this.resetRound();
@@ -492,6 +483,7 @@ export class Game {
     }
 
     event.preventDefault();
+    if (this.movePointerId !== null) return;
     this.movePointerId = event.pointerId;
     this.ui.stickZone?.setPointerCapture(event.pointerId);
     this.updateStickFromEvent(event);
@@ -621,6 +613,7 @@ export class Game {
     if (this.controls.isLocked) {
       this.controls.unlock();
     }
+    this.ui.setRunning(false);
     this.ui.showEnd(this.score);
   }
 
@@ -635,7 +628,7 @@ export class Game {
       this.player.update(deltaSeconds);
 
       if (!wasGrounded && this.player.isOnGround()) {
-        this.audio.playJump();
+        this.audio.playLanding();
       }
 
       this.audio.updateMovement(
@@ -665,10 +658,10 @@ export class Game {
         this.endRound();
       }
 
-      this.updateHud();
+      if (this.state === "running") this.updateHud();
     } else {
       this.targetManager.update(
-        deltaSeconds,
+        this.state === "paused" ? 0 : deltaSeconds,
         this.player.getPosition(),
         playerViewDirection,
         false
@@ -676,7 +669,7 @@ export class Game {
     }
 
     this.firstPersonWeapon.update(
-      deltaSeconds,
+      this.state === "running" ? deltaSeconds : 0,
       this.state === "running" ? this.player.getMovementAmount() : 0
     );
 
@@ -708,8 +701,15 @@ export class Game {
     const hit = this.targetManager.handleShot(this.raycaster);
 
     if (hit) {
-      this.audio.playHit();
-      this.score += hit.points;
+      if (hit.points > 0) {
+        this.audio.playHit();
+        this.ui.flashHit();
+        this.score += hit.points;
+      } else {
+        const localPoint = this.camera.worldToLocal(hit.point.clone());
+        const pan = localPoint.x / Math.max(1, Math.abs(localPoint.z));
+        this.audio.playImpact(hit.surface, Math.max(-1, Math.min(1, pan)));
+      }
     }
 
     this.updateHud();
@@ -718,8 +718,8 @@ export class Game {
 
   detectMobile() {
     return (
-      navigator.maxTouchPoints > 0 ||
-      window.matchMedia("(pointer: coarse)").matches
+      window.matchMedia("(pointer: coarse)").matches ||
+      (navigator.maxTouchPoints > 0 && window.matchMedia("(hover: none)").matches)
     );
   }
 
@@ -753,6 +753,8 @@ export class Game {
     this.mobilePortraitPaused = false;
     this.state = "running";
     this.clock.getDelta();
+    this.audio.resume();
+    this.ui.setRunning(true);
     this.ui.hideScreen();
     this.syncMobilePresentation();
   }
@@ -785,6 +787,9 @@ export class Game {
       if (this.mobilePortraitPaused && this.state === "paused") {
         this.mobilePortraitPaused = false;
         this.state = "running";
+        this.clock.getDelta();
+        this.audio.resume();
+        this.ui.setRunning(true);
         this.ui.hideScreen();
       }
 
@@ -798,9 +803,25 @@ export class Game {
 
     if (this.state === "running") {
       this.mobilePortraitPaused = true;
-      this.audio.reset();
+      this.audio.pause();
       this.state = "paused";
+      this.ui.setRunning(false);
+      this.player.clearInput();
+      this.releaseMobilePointers();
     }
+  }
+
+  pauseForInterruption() {
+    this.player.clearInput();
+    this.releaseMobilePointers();
+    this.mobileFireHeld = false;
+    if (this.state !== "running") return;
+    this.state = "paused";
+    this.audio.pause();
+    this.ui.setRunning(false);
+    this.ui.setMobileControlsVisible(false);
+    this.ui.showPause();
+    if (this.controls.isLocked) this.controls.unlock();
   }
 
   updateStickFromEvent(event) {
