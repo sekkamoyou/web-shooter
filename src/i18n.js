@@ -26,14 +26,19 @@ export const translations = {
       reload: "RLD"
     },
     screen: {
+      loadingButton: "準備中…",
+      retryButton: "再試行",
+      loading: "射撃場を読み込んでいます。",
+      loadError: "読み込みに失敗しました。再試行してください。",
+      pointerLockError: "マウス操作を開始できませんでした。ボタンを押して再試行してください。",
       localeLabel: "LANGUAGE",
       start: {
-        eyebrow: "",
+        eyebrow: "射撃訓練 / 60秒",
         title: "TARGET RUSH",
         mobileBody:
-          "左のジョイスティックで移動し、右側をドラッグして照準します。FIREで射撃、JUMPでジャンプ、RLDでリロード。横向きで始めると、前方の障害物のまわりに6つのターゲットが出現します。",
+          "60秒間で6つの標的を狙いましょう。\n左で移動 · 右で照準\nFIRE 射撃 · JUMP ジャンプ · RLD リロード",
         desktopBody:
-          "WASDで移動し、マウスで照準します。クリックで射撃、Spaceでジャンプ、Rでリロード。開始すると、前方の障害物のまわりに6つのターゲットが出現します。",
+          "60秒間で6つの標的を狙いましょう。\nWASD 移動 · マウス照準 · クリック射撃\nSpace ジャンプ · R リロード",
         button: "ゲーム開始"
       },
       pause: {
@@ -86,14 +91,19 @@ export const translations = {
       reload: "RLD"
     },
     screen: {
+      loadingButton: "Loading…",
+      retryButton: "Retry",
+      loading: "Preparing the range.",
+      loadError: "The range could not load. Please retry.",
+      pointerLockError: "Mouse capture failed. Press the button to try again.",
       localeLabel: "LANGUAGE",
       start: {
-        eyebrow: "",
+        eyebrow: "FIELD TRAINING / 60 SECONDS",
         title: "TARGET RUSH",
         mobileBody:
-          "Move with the left joystick and drag on the right side to aim. FIRE shoots, JUMP jumps, and RLD reloads. Start in landscape and six targets will spawn around the forward obstacles.",
+          "Six targets. Sixty seconds. Make every shot count.\nMove on the left · Aim on the right\nFIRE shoot · JUMP jump · RLD reload",
         desktopBody:
-          "Move with WASD and aim with the mouse. Click to shoot, Space to jump, and R to reload. Once the round starts, six targets will spawn around the forward obstacles.",
+          "Six targets. Sixty seconds. Make every shot count.\nWASD move · Mouse aim · Click shoot\nSpace jump · R reload",
         button: "Start Game"
       },
       pause: {
@@ -146,14 +156,19 @@ export const translations = {
       reload: "RLD"
     },
     screen: {
+      loadingButton: "준비 중…",
+      retryButton: "다시 시도",
+      loading: "사격장을 불러오는 중입니다.",
+      loadError: "불러오지 못했습니다. 다시 시도해 주세요.",
+      pointerLockError: "마우스 잠금을 시작하지 못했습니다. 버튼을 눌러 다시 시도해 주세요.",
       localeLabel: "LANGUAGE",
       start: {
-        eyebrow: "",
+        eyebrow: "사격 훈련 / 60초",
         title: "TARGET RUSH",
         mobileBody:
-          "왼쪽 조이스틱으로 이동하고 오른쪽 화면을 드래그해 조준하세요. FIRE로 사격하고 JUMP로 점프, RLD로 재장전합니다. 가로 모드에서 시작하면 전방 장애물 주변에 타겟 6개가 나타납니다.",
+          "60초 동안 표적 6개를 명중시키세요.\n왼쪽 이동 · 오른쪽 조준\nFIRE 사격 · JUMP 점프 · RLD 재장전",
         desktopBody:
-          "WASD로 이동하고 마우스로 조준하세요. 좌클릭으로 사격, Space로 점프, R로 재장전합니다. 시작하면 전방 장애물 주변에 타겟 6개가 나타납니다.",
+          "60초 동안 표적 6개를 명중시키세요.\nWASD 이동 · 마우스 조준 · 좌클릭 사격\nSpace 점프 · R 재장전",
         button: "게임 시작"
       },
       pause: {

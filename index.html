@@ -6,15 +6,9 @@
       name="viewport"
       content="width=device-width, initial-scale=1.0, viewport-fit=cover"
     />
-    <meta name="theme-color" content="#0086CC" />
+    <meta name="theme-color" content="#191D1F" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;800&family=Zen+Dots&display=swap"
-    />
     <link rel="apple-touch-icon" href="%BASE_URL%apple-touch-icon.png" />
     <link rel="icon" type="image/png" href="%BASE_URL%favicon.png" />
     <title>Target Rush FPS</title>
@@ -22,7 +16,7 @@
   </head>
   <body>
     <div id="app">
-      <div class="hud">
+      <div class="hud" aria-hidden="true">
         <div class="hud__time">
           <span class="hud__label hud__label--time" id="time-label">TIME</span>
           <strong class="hud__value hud__value--time" id="time">60.0</strong>
@@ -40,6 +34,7 @@
           <span></span>
           <span></span>
         </div>
+        <div class="hitmarker" id="hitmarker" aria-hidden="true"></div>
       </div>
 
       <div class="mobile-controls" id="mobile-controls" aria-hidden="true">
@@ -81,7 +76,7 @@
         </div>
       </div>
 
-      <div class="orientation-lock" id="orientation-lock">
+      <div class="orientation-lock" id="orientation-lock" aria-hidden="true">
         <div class="orientation-lock__panel">
           <p class="orientation-lock__eyebrow" id="orientation-eyebrow">MOBILE MODE</p>
           <h2 class="orientation-lock__title" id="orientation-title">横向きにしてください</h2>
@@ -91,7 +86,7 @@
         </div>
       </div>
 
-      <div class="screen screen--visible" id="screen">
+      <div class="screen screen--visible" id="screen" aria-labelledby="screen-title">
         <div class="screen__panel" id="screen-panel">
           <div class="screen__layout">
             <div class="screen__title-block">
@@ -133,6 +128,7 @@
                   </div>
                 </div>
               </div>
+              <p class="screen__notice" id="screen-notice" role="status" hidden></p>
               <button class="screen__button" id="screen-button" type="button">
                 ゲーム開始
               </button>

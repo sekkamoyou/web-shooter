@@ -1,306 +1,155 @@
-import {
-  Box3,
-  CylinderGeometry,
-  Group,
-  MathUtils,
-  Mesh,
-  MeshBasicMaterial,
-  SphereGeometry,
-  Vector3
-} from "three";
+import { AnimationClip, AnimationMixer, CylinderGeometry, Group, LoopOnce, LoopRepeat, MathUtils, Mesh, MeshBasicMaterial, PerspectiveCamera, Vector3 } from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { assetPath } from "./assetPath.js";
 
-const MODEL_PATHS = {
-  pistol: assetPath("models/weapons/p320.glb")
-};
-
-const TEMP_BOX = new Box3();
-const TEMP_SIZE = new Vector3();
-const TEMP_CENTER = new Vector3();
-
-function scaleObjectToDepth(object, targetDepth) {
-  TEMP_BOX.setFromObject(object);
-  TEMP_BOX.getSize(TEMP_SIZE);
-  const currentDepth = TEMP_SIZE.z || 1;
-  const scaleFactor = targetDepth / currentDepth;
-  object.scale.multiplyScalar(scaleFactor);
-  object.updateMatrixWorld(true);
-}
-
-function getBoxPoint(object, xFactor, yFactor, zFactor) {
-  TEMP_BOX.setFromObject(object);
-  TEMP_BOX.getSize(TEMP_SIZE);
-
-  return new Vector3(
-    TEMP_BOX.min.x + TEMP_SIZE.x * xFactor,
-    TEMP_BOX.min.y + TEMP_SIZE.y * yFactor,
-    TEMP_BOX.min.z + TEMP_SIZE.z * zFactor
-  );
-}
-
-function configureViewModelMesh(mesh) {
-  const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-  mesh.castShadow = false;
-  mesh.receiveShadow = false;
-  mesh.frustumCulled = false;
-  mesh.renderOrder = 10;
-
-  materials.forEach((material) => {
-    material.depthTest = true;
-    material.depthWrite = true;
-  });
-}
+const CLIPS = { idle: "Pistol_IDLE", walk: "Pistol_WALK", fire: "Pistol_FIRE", reload: "Pistol_RELOAD" };
 
 export class FirstPersonWeapon {
   constructor(camera) {
     this.camera = camera;
-    this.loader = new GLTFLoader();
-    this.viewScale = 1;
-    this.basePosition = {
-      x: 2.6,
-      y: -2,
-      z: 0.6,
-    };
-    this.baseRotation = {
-      x: -0.1,
-      y: -0.02,
-      z: -0.02
-    };
-    this.walkTime = 0;
-    this.recoil = 0;
-    this.flash = 0;
-    this.reloadTimer = 0;
-    this.reloadDuration = 0;
-    this.isReloading = false;
-
     this.root = new Group();
-    this.root.position.set(
-      this.basePosition.x,
-      this.basePosition.y,
-      this.basePosition.z
-    );
-    this.root.rotation.set(
-      this.baseRotation.x,
-      this.baseRotation.y,
-      this.baseRotation.z
-    );
-    this.root.scale.setScalar(this.viewScale);
-
-    this.weaponPivot = new Group();
-    this.root.add(this.weaponPivot);
-
-    this.weaponGroup = new Group();
-    this.weaponPivot.add(this.weaponGroup);
-
-    this.pistol = null;
-    this.weaponPivotBasePosition = new Vector3();
-    this.weaponGroupBasePosition = new Vector3();
-    this.muzzleFlash = this.createMuzzleFlash();
-    this.weaponGroup.add(this.muzzleFlash);
-
-    this.camera.add(this.root);
-    this.loadAssets();
+    // Screen framing against the CS2 POV reference; no bone or grip overrides.
+    this.basePosition = new Vector3(-0.05, 0.055, 0);
+    this.root.position.copy(this.basePosition);
+    this.view = new Group();
+    this.view.scale.setScalar(0.25);
+    this.root.add(this.view);
+    this.muzzleFlash = new Mesh(new CylinderGeometry(0.3, 0.8, 3, 6), new MeshBasicMaterial({ color: "#ffd788", transparent: true }));
+    this.muzzleFlash.rotation.x = Math.PI / 2;
+    this.reset();
   }
 
-  async loadAssets() {
-    try {
-      const pistol = await this.loader.loadAsync(MODEL_PATHS.pistol);
-
-      this.assembleWeapon(pistol.scene);
-      this.reset();
-    } catch (error) {
-      console.error("Failed to load first-person weapon assets.", error);
+  loadAssets() {
+    if (!this.loading) {
+      this.loading = new GLTFLoader().loadAsync(assetPath("models/weapons/animated-pistol/scene.gltf"))
+        .then((gltf) => this.assembleWeapon(gltf))
+        .catch((error) => { this.loading = null; throw error; });
     }
+    return this.loading;
   }
 
-  createMuzzleFlash() {
-    const flashGroup = new Group();
-    const flashMaterial = new MeshBasicMaterial({
-      color: "#ffd37a",
-      transparent: true,
-      opacity: 0
-    });
-    const flashCoreMaterial = new MeshBasicMaterial({
-      color: "#fff6d5",
-      transparent: true,
-      opacity: 0
-    });
-
-    const flashCone = new Mesh(
-      new CylinderGeometry(0.01, 0.05, 0.1125, 6),
-      flashMaterial
-    );
-    flashCone.rotation.x = Math.PI / 2;
-    flashCone.position.z = -0.03125;
-    configureViewModelMesh(flashCone);
-    flashGroup.add(flashCone);
-
-    const flashCore = new Mesh(new SphereGeometry(0.028125, 10, 10), flashCoreMaterial);
-    flashCore.position.z = -0.075;
-    configureViewModelMesh(flashCore);
-    flashGroup.add(flashCore);
-
-    flashGroup.visible = false;
-    return flashGroup;
-  }
-
-  prepareImportedObject(object) {
-    object.traverse((child) => {
-      if (!(child instanceof Mesh)) {
-        return;
+  assembleWeapon(gltf) {
+    this.model = gltf.scene;
+    this.mixer = new AnimationMixer(this.model);
+    this.actions = {};
+    for (const [name, clipName] of Object.entries(CLIPS)) {
+      let clip = gltf.animations.find((entry) => entry.name === clipName);
+      if (!clip) throw new Error(`Missing authored animation: ${clipName}`);
+      if (name === "fire") {
+        // CS2 P250/Glock reference: one impulse, then a short, non-oscillating return.
+        // Reuse the artist's rest/peak poses; the original 1.15s settling tail is omitted.
+        clip = new AnimationClip("Pistol_FIRE_CRISP", 0.22, clip.tracks.map((track) => {
+          const source = track.createInterpolant();
+          if (track.name.startsWith("culasse_025.")) {
+            return new track.constructor(track.name, [0, 0.02, 0.065, 0.22],
+              [0, 0.06, 0.20, 0].flatMap((time) => Array.from(source.evaluate(time))));
+          }
+          const poses = new track.constructor(track.name, [0, 1],
+            [0, 0.25].flatMap((time) => Array.from(source.evaluate(time)))).createInterpolant();
+          return new track.constructor(track.name, [0, 0.045, 0.09, 0.14, 0.185, 0.22],
+            [0, 1, 0.5, 0.16, 0.03, 0].flatMap((weight) => Array.from(poses.evaluate(weight))));
+        }));
       }
-
-      configureViewModelMesh(child);
+      this.actions[name] = this.mixer.clipAction(clip);
+    }
+    this.arms = this.model.getObjectByName("Object_7");
+    this.pistol = this.model.getObjectByName("Object_13");
+    this.magazine = this.model.getObjectByName("chargeur_023");
+    this.slide = this.model.getObjectByName("culasse_025");
+    this.gunBone = this.model.getObjectByName("Pistol_Bone_022");
+    if (!this.arms || !this.pistol || !this.magazine || !this.slide || !this.gunBone) throw new Error("Incomplete authored pistol rig");
+    this.model.traverse((node) => {
+      if (node.isMesh) { node.frustumCulled = false; node.castShadow = node.receiveShadow = true; }
     });
-  }
-
-  assembleWeapon(pistolScene) {
-    this.pistol = pistolScene;
-    this.prepareImportedObject(this.pistol);
-    this.weaponGroup.add(this.pistol);
-
-    scaleObjectToDepth(this.pistol, 0.17);
-
-    TEMP_BOX.setFromObject(this.pistol);
-    TEMP_BOX.getCenter(TEMP_CENTER);
-    this.pistol.position.set(
-      -TEMP_CENTER.x + 0.015,
-      -TEMP_CENTER.y - 0.06,
-      -TEMP_BOX.max.z + 0.11
-    );
-    this.pistol.updateMatrixWorld(true);
-
-    this.positionAttachments();
-    this.configureReloadPivot();
-  }
-
-  positionAttachments() {
-    this.weaponGroup.updateMatrixWorld(true);
-    const barrel = this.pistol?.getObjectByName("Barrel");
-
-    if (!barrel) {
-      return;
+    this.actions.idle.play();
+    this.mixer.update(0);
+    this.model.updateMatrixWorld(true);
+    // Locate the exported muzzle on the posed mesh, then bind the flash to its gun bone.
+    const vertex = new Vector3();
+    const muzzle = new Vector3();
+    let furthest = -Infinity;
+    for (let i = 0; i < this.pistol.geometry.attributes.position.count; i += 1) {
+      this.pistol.getVertexPosition(i, vertex).applyMatrix4(this.pistol.matrixWorld);
+      if (vertex.z > furthest) { furthest = vertex.z; muzzle.copy(vertex); }
     }
+    muzzle.x = this.gunBone.getWorldPosition(new Vector3()).x;
+    this.muzzleFlash.position.copy(this.gunBone.worldToLocal(muzzle));
+    this.gunBone.add(this.muzzleFlash);
 
-    const flashAnchor = this.weaponGroup.worldToLocal(
-      getBoxPoint(barrel, 0.5, 0.52, 0).clone()
-    );
-    this.muzzleFlash.position.copy(flashAnchor);
-    this.muzzleFlash.position.z -= 0.01;
+    // Exact camera transform from the creator's scene.tscn (see attribution).
+    const authorCamera = new PerspectiveCamera(50, 16 / 9, 0.01, 100);
+    authorCamera.position.set(0.028, 2.237, -1.033);
+    authorCamera.rotation.y = Math.PI;
+    authorCamera.updateMatrixWorld(true);
+    const authorView = new Group();
+    authorView.applyMatrix4(authorCamera.matrixWorldInverse);
+    authorView.add(this.model);
+    this.view.add(authorView);
+    this.camera.add(this.root);
+    this.reset();
   }
 
-  configureReloadPivot() {
-    if (!this.pistol) {
-      return;
+  playAction(name, restart = false) {
+    if (!this.actions || (this.actionName === name && !restart)) return;
+    const previous = this.activeAction;
+    const action = this.actions[name];
+    const repeating = name === "idle" || name === "walk";
+    action.reset().setLoop(repeating ? LoopRepeat : LoopOnce, repeating ? Infinity : 1);
+    action.clampWhenFinished = true;
+    action.setEffectiveTimeScale(name === "reload" ? action.getClip().duration / this.reloadDuration : 1);
+    action.setEffectiveWeight(1).play();
+    if (name === "fire") {
+      // An entry crossfade softens the shot and leaks the previous recovery into rapid fire.
+      for (const other of Object.values(this.actions)) if (other !== action) other.stop();
+    } else if (previous && previous !== action) {
+      previous.fadeOut(0.06);
+      action.fadeIn(0.06);
     }
-
-    const pivotPoint = this.weaponGroup.worldToLocal(
-      getBoxPoint(this.pistol, 0.5, 0.36, 0.82).clone()
-    );
-
-    this.weaponPivot.position.copy(pivotPoint);
-    this.weaponGroup.position.copy(pivotPoint).multiplyScalar(-1);
-    this.weaponPivotBasePosition.copy(this.weaponPivot.position);
-    this.weaponGroupBasePosition.copy(this.weaponGroup.position);
+    this.activeAction = action;
+    this.actionName = name;
   }
 
   reset() {
-    this.walkTime = 0;
-    this.recoil = 0;
-    this.flash = 0;
-    this.reloadTimer = 0;
-    this.reloadDuration = 0;
+    this.flash = this.fireTimer = this.reloadTimer = 0;
+    this.reloadDuration = 1.4;
     this.isReloading = false;
     this.muzzleFlash.visible = false;
-    this.root.position.set(
-      this.basePosition.x,
-      this.basePosition.y,
-      this.basePosition.z
-    );
-    this.root.rotation.set(
-      this.baseRotation.x,
-      this.baseRotation.y,
-      this.baseRotation.z
-    );
-    this.weaponPivot.position.copy(this.weaponPivotBasePosition);
-    this.weaponPivot.rotation.set(0, 0, 0);
-    this.weaponGroup.position.copy(this.weaponGroupBasePosition);
-
+    this.mixer?.stopAllAction();
+    this.activeAction = null;
+    this.actionName = null;
+    this.playAction("idle");
+    this.update(0, 0);
   }
 
   triggerFire() {
-    this.recoil = Math.min(this.recoil + 1, 1.35);
+    if (this.isReloading || !this.actions) return;
+    this.fireTimer = this.actions.fire.getClip().duration;
     this.flash = 1;
+    this.playAction("fire", true);
   }
 
-  triggerReload(duration) {
+  triggerReload(duration = 1.4) {
     this.isReloading = true;
     this.reloadDuration = Math.max(duration, 0.01);
     this.reloadTimer = 0;
+    this.fireTimer = 0;
+    this.playAction("reload");
   }
 
-  update(deltaSeconds, movementAmount) {
-    this.walkTime += deltaSeconds * (2.2 + movementAmount * 8);
-    this.recoil = MathUtils.damp(this.recoil, 0, 18, deltaSeconds);
-    this.flash = MathUtils.damp(this.flash, 0, 34, deltaSeconds);
-
+  update(deltaSeconds, movementAmount = 0) {
+    this.root.position.copy(this.basePosition);
+    // Keep the authored view centered on narrow screens without changing hand geometry.
+    this.root.position.x -= 0.10 * Math.max(0, 1 - this.camera.aspect / 1.2);
+    this.flash = MathUtils.damp(this.flash, 0, 40, deltaSeconds);
+    this.fireTimer = Math.max(0, this.fireTimer - deltaSeconds);
+    this.mixer?.update(deltaSeconds);
     if (this.isReloading) {
-      this.reloadTimer = Math.min(
-        this.reloadTimer + deltaSeconds,
-        this.reloadDuration
-      );
-
-      if (this.reloadTimer >= this.reloadDuration) {
-        this.isReloading = false;
-      }
+      this.reloadTimer = Math.min(this.reloadTimer + deltaSeconds, this.reloadDuration);
+      if (this.reloadTimer >= this.reloadDuration) this.isReloading = false;
     }
-
-    const idleSwayX = Math.sin(this.walkTime * 0.55) * 0.004;
-    const idleSwayY = Math.cos(this.walkTime * 0.42) * 0.004;
-    const recoilOffset = this.recoil * 0.055;
-    const recoilLift = this.recoil * 0.018;
-
-    let reloadTilt = 0;
-    let reloadRoll = 0;
-
-    if (this.isReloading) {
-      const progress = this.reloadTimer / this.reloadDuration;
-      const posePhase = Math.sin(progress * Math.PI);
-
-      reloadTilt = posePhase * 0.34;
-      reloadRoll = posePhase * -0.32;
-    }
-
-    this.root.position.set(
-      this.basePosition.x + idleSwayX,
-      this.basePosition.y + idleSwayY + recoilLift,
-      this.basePosition.z + recoilOffset
-    );
-
-    this.root.rotation.set(
-      this.baseRotation.x,
-      this.baseRotation.y,
-      this.baseRotation.z
-    );
-
-    this.weaponPivot.position.copy(this.weaponPivotBasePosition);
-    this.weaponGroup.position.copy(this.weaponGroupBasePosition);
-    this.weaponPivot.rotation.set(reloadTilt, 0, reloadRoll);
-
-    const flashVisible = this.flash > 0.08;
-    this.muzzleFlash.visible = flashVisible;
-
-    if (flashVisible) {
-      const flashScale = 0.5 + this.flash * 0.5625;
-      this.muzzleFlash.scale.set(
-        0.5 + this.flash * 0.21875,
-        0.5 + this.flash * 0.21875,
-        flashScale
-      );
-
-      this.muzzleFlash.children[0].material.opacity = this.flash * 0.72;
-      this.muzzleFlash.children[1].material.opacity = this.flash * 0.95;
-    }
+    if (!this.isReloading && this.fireTimer === 0) this.playAction(movementAmount > 0.1 ? "walk" : "idle");
+    this.muzzleFlash.visible = this.flash > 0.08;
+    this.muzzleFlash.material.opacity = this.flash;
+    this.muzzleFlash.scale.setScalar(0.6 + this.flash * 0.4);
   }
 }

@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>FPS browser checks</title>
+<style>#test-controls{position:fixed;z-index:50;top:8px;left:8px;display:flex;gap:6px}#test-controls button{padding:7px;background:#e9e7dd;color:#161b1c;border:1px solid #888;font:12px sans-serif}#test-results{position:fixed;z-index:51;inset:60px 10px auto;padding:18px;background:#172020;color:#eee;white-space:pre-wrap;font:14px monospace;max-height:70vh;overflow:auto}</style>
+<div id="test-controls"><button id="checks">Run checks</button><button id="desktop">Desktop preview</button><button id="mobile">Mobile preview</button><button id="fire-test">Fire</button><button id="reload-test">Reload</button><button id="pause-test">Pause</button><button id="background-test">Background view</button><button id="background-before">Old/new background</button></div><pre id="test-results">Loading test assets…</pre>
+<script type="module">
+import "../src/style.scss";
+import { Game } from "../src/game.js";
+const markup = new DOMParser().parseFromString(await (await fetch("../index.html")).text(), "text/html");
+const root = markup.querySelector("#app");
+document.body.append(root);
+const game = new Game(root);
+// Test-only browser API doubles: native pointer/fullscreen permission is tested separately.
+game.controls.lock = () => { game.controls.isLocked = true; game.controls.dispatchEvent({type:"lock"}); };
+game.controls.unlock = () => { game.controls.isLocked = false; game.controls.dispatchEvent({type:"unlock"}); };
+game.tryEnterFullscreen = async () => {};
+game.tryLockLandscape = async () => {};
+game.mount();
+const output = document.querySelector("#test-results");
+await game.prepareAssets();
+output.textContent = game.assetsReady ? "Assets ready. Run checks or select a preview. Pointer lock and fullscreen are test doubles here." : "FAIL: assets unavailable";
+const frame = () => new Promise(requestAnimationFrame);
+function assert(value, message) { if (!value) throw new Error(message); }
+function preview(mobile) {
+  output.hidden = true;
+  game.pauseForInterruption();
+  game.detectMobile = () => mobile;
+  game.isMobile = mobile;
+  game.resetRound();
+  game.syncDeviceMode();
+  game.ui.showStart(mobile);
+  game.handleStart();
+}
+document.querySelector("#desktop").onclick = () => preview(false);
+document.querySelector("#mobile").onclick = () => preview(true);
+document.querySelector("#fire-test").onclick = () => game.fireShot();
+document.querySelector("#reload-test").onclick = () => { game.fireShot(); game.handleMobileReload({preventDefault(){}}); if(!game.isMobile) game.handleKeyDown({code:"KeyR"}); };
+document.querySelector("#pause-test").onclick = () => game.pauseForInterruption();
+let backgroundAngle = 0;
+document.querySelector("#background-test").onclick = () => {
+  output.hidden = true; game.pauseForInterruption(); game.ui.hideScreen();
+  game.camera.position.set(0, 10, 0);
+  game.camera.lookAt(Math.sin(backgroundAngle) * 100, 10, Math.cos(backgroundAngle) * 100);
+  backgroundAngle += Math.PI / 2;
+};
+document.querySelector("#background-before").onclick = () => {
+  const old = game.scene.background !== game.arena.environment.texture;
+  game.scene.background = old ? game.arena.environment.texture : game.arena.background.texture;
+  game.scene.backgroundIntensity = old ? 0.65 : 1;
+  game.scene.backgroundBlurriness = old ? 0.12 : 0;
+};
+document.querySelector("#checks").onclick = async () => {
+  const passed=[];
+  const previousLocale=game.ui.locale;
+  output.hidden=false;
+  output.textContent="Running checks…";
+  try {
+    assert(game.assetsReady,"visual assets load");
+    assert(game.firstPersonWeapon.pistol && game.firstPersonWeapon.arms,"imported weapon and arms");
+    assert(game.arena.loaded && game.arena.environment,"environment maps and models");
+    passed.push("PASS: actual weapon, rigged arms, environment models and PBR textures load");
+    assert(game.scene.background !== game.scene.environment && game.scene.backgroundBlurriness === 0,"background is sharp and independent of lighting");
+    assert(game.scene.environment === game.arena.environment.texture && game.weaponScene.environment === game.scene.environment,"world and weapon retain the original HDR lighting");
+    assert(game.arena.background.width === Math.min(2048,game.renderer.capabilities.maxCubemapSize),"high-resolution background respects GPU cube limits");
+    passed.push("PASS: separate sharp background, bounded cube resolution, unchanged HDR lighting");
+    game.audio.unlock(); await game.audio.ensureBuffers();
+    assert(game.audio.buffers.size===14,"all 14 sound buffers decoded");
+    passed.push("PASS: 14 actual audio buffers decoded");
+    game.pauseForInterruption(); game.resetRound(); game.isMobile=false; game.syncDeviceMode();
+    await game.handleStart();
+    assert(game.state==="running" && !game.ui.screenVisible,"desktop start");
+    game.scene.updateMatrixWorld(true);
+    const target=game.targetManager.targets[0];
+    target.group.getWorldPosition(game.playerViewDirection); game.playerViewDirection.y=1.1;
+    game.camera.lookAt(game.playerViewDirection); game.camera.updateMatrixWorld(true);
+    game.targetManager.obstacles=[]; // isolate scoring from randomized cover for this assertion
+    const before=game.score; game.fireShot();
+    assert(game.score===before+100,"target scores exactly 100");
+    assert(game.weapon.ammo===29,"one shot consumes one round");
+    game.handleKeyDown({code:"KeyR"});
+    assert(game.weapon.isReloading && game.firstPersonWeapon.isReloading,"reload starts both timelines");
+    game.pauseForInterruption();
+    const reloadTime=game.weapon.reloadTimer; const poseTime=game.firstPersonWeapon.reloadTimer;
+    await frame(); await frame();
+    assert(game.weapon.reloadTimer===reloadTime && game.firstPersonWeapon.reloadTimer===poseTime,"pause freezes reload and view model");
+    assert(game.audio.paused,"pause suspends audio");
+    passed.push("PASS: desktop start, scoring/ammo, synchronized reload, pause freezes both timelines and audio");
+    game.weapon.update(1.4); game.firstPersonWeapon.update(1.4,0);
+    assert(game.weapon.ammo===30 && !game.firstPersonWeapon.isReloading,"reload completes");
+    game.player.setKey("KeyW",true); game.player.setJoystick(1,0); game.mobileFireHeld=true;
+    game.pauseForInterruption();
+    assert(!game.player.keys.KeyW && game.player.joystick.x===0 && !game.mobileFireHeld,"input cleared");
+    passed.push("PASS: reload completes at 1.4 seconds; interrupted input clears");
+    for(const locale of ["ja","en","kr"]) {
+      game.ui.setLocale(locale); game.ui.setAssetState("loading");
+      assert(game.ui.screenButton.disabled,"loading disables start");
+      game.ui.setAssetState("error"); assert(!game.ui.screenButton.disabled,"error allows retry");
+      game.ui.setAssetState("ready");
+    }
+    game.ui.setLocale("en");
+    assert(innerWidth > innerHeight,"Run mobile checks in a landscape viewport");
+    game.isMobile=true; game.syncDeviceMode(); game.resetRound(); await game.handleStart();
+    assert(game.state==="running","mobile start");
+    game.ui.setMobileControlsVisible(true);
+    assert(game.ui.mobileControls.getAttribute("aria-hidden")==="false","mobile accessibility state");
+    assert(getComputedStyle(game.ui.mobileControls).display !== "none","mobile controls actually visible");
+    game.handleMobileFirePointerDown({preventDefault(){},pointerId:1});
+    assert(game.weapon.ammo===29,"mobile fire");
+    game.handleMobileFirePointerUp({preventDefault(){}});
+    game.handleMobileJump({preventDefault(){}}); assert(!game.player.isOnGround(),"mobile jump");
+    game.handleMobileReload({preventDefault(){}}); assert(game.weapon.isReloading,"mobile reload");
+    passed.push("PASS: three locales, loading/error UI, mobile start/fire/jump/reload/accessibility");
+    game.timeLeft=0.001; await frame(); await frame();
+    assert(game.state==="ended" && game.ui.statusMode==="ended","round end state persists");
+    passed.push("PASS: round ends and final HUD status remains ended");
+    game.isMobile=false; game.syncDeviceMode(); game.resetRound(); await game.handleStart();
+    const samples=[]; game.renderer.info.autoReset=false; game.renderer.info.reset();
+    let previous=performance.now(),calls=0,triangles=0;
+    for(let i=0;i<90;i++){await frame();const now=performance.now();samples.push(now-previous);previous=now;calls=Math.max(calls,game.renderer.info.render.calls);triangles=Math.max(triangles,game.renderer.info.render.triangles);game.renderer.info.reset();}
+    game.renderer.info.autoReset=true;game.pauseForInterruption();
+    samples.sort((a,b)=>a-b);
+    passed.push(`Local preview: median frame ${samples[45].toFixed(1)}ms; p95 ${samples[85].toFixed(1)}ms; ${calls} draw calls; ${triangles} triangles (both scenes).`);
+    output.textContent=passed.join("\n")+"\nNative pointer lock/fullscreen and physical touch are NOT covered by these doubles.";
+  } catch(error) {game.pauseForInterruption();output.textContent=passed.join("\n")+"\nFAIL: "+error.stack;}
+  finally { game.ui.setLocale(previousLocale); }
+};
+</script></html>

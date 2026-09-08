@@ -13,20 +13,30 @@ const SOUND_BANK = {
     volume: 0.42,
     playbackRateRange: [0.94, 1.04]
   },
-  jump: {
-    paths: ["audio/sfx/jump.mp3"],
+  landing: {
+    paths: ["audio/sfx/landing.mp3"],
     volume: 0.3,
     playbackRateRange: [0.98, 1.02]
   },
   shot: {
-    paths: ["audio/sfx/shot.mp3"],
-    volume: 0.62,
+    paths: ["audio/sfx/shot-01.mp3", "audio/sfx/shot-02.mp3"],
+    volume: 0.48,
     playbackRateRange: [0.97, 1.01]
   },
   reload: {
     paths: ["audio/sfx/reload.mp3"],
     volume: 0.35,
     playbackRateRange: [0.99, 1.01]
+  },
+  concrete: {
+    paths: ["audio/sfx/impact-concrete.mp3"],
+    volume: 0.24,
+    playbackRateRange: [0.95, 1.05]
+  },
+  metal: {
+    paths: ["audio/sfx/impact-metal.mp3"],
+    volume: 0.24,
+    playbackRateRange: [0.95, 1.05]
   },
   hit: {
     paths: [
@@ -48,20 +58,25 @@ export class AudioManager {
     this.activeSources = new Set();
     this.lastPlayedIndex = new Map();
     this.stepTimer = 0;
+    this.paused = false;
   }
 
-  async unlock() {
+  unlock() {
+    // Audio is optional: neither autoplay rejection nor downloads gate gameplay.
+    this.resume();
+    void this.ensureBuffers().catch(() => {});
+  }
+
+  pause() {
+    this.paused = true;
+    // Suspending the audio clock preserves every voice, including reload position.
+    return this.context?.suspend().catch(() => {});
+  }
+
+  resume() {
+    this.paused = false;
     const context = this.getContext();
-
-    if (!context) {
-      return;
-    }
-
-    if (context.state === "suspended") {
-      await context.resume();
-    }
-
-    await this.ensureBuffers();
+    return context?.resume().catch(() => {});
   }
 
   reset() {
@@ -87,23 +102,27 @@ export class AudioManager {
     });
   }
 
-  playJump() {
-    this.play("jump");
+  playLanding() {
+    this.play("landing");
   }
 
   playShot() {
     this.play("shot");
   }
 
-  playReload() {
-    this.play("reload");
+  playReload(duration = 1.4) {
+    return this.play("reload", { duration });
   }
 
   playHit() {
     this.play("hit");
   }
 
-  play(key, { volumeMultiplier = 1 } = {}) {
+  playImpact(surface, pan = 0) {
+    return this.play(surface === "metal" ? "metal" : "concrete", { pan });
+  }
+
+  play(key, { volumeMultiplier = 1, duration, pan = 0 } = {}) {
     const context = this.getRunningContext();
     const config = SOUND_BANK[key];
 
@@ -119,24 +138,30 @@ export class AudioManager {
 
     const source = context.createBufferSource();
     source.buffer = selection.buffer;
-    source.playbackRate.value = randomBetween(
-      config.playbackRateRange[0],
-      config.playbackRateRange[1]
-    );
+    source.playbackRate.value = Number.isFinite(duration) && duration > 0
+      ? selection.buffer.duration / duration
+      : randomBetween(
+          config.playbackRateRange[0],
+          config.playbackRateRange[1]
+        );
 
     const gain = context.createGain();
     gain.gain.value =
       config.volume * volumeMultiplier * randomBetween(0.97, 1.03);
 
     source.connect(gain);
-    gain.connect(this.masterGain);
+    const panner = context.createStereoPanner();
+    panner.pan.value = Number.isFinite(pan) ? Math.max(-1, Math.min(1, pan)) : 0;
+    gain.connect(panner);
+    panner.connect(this.masterGain);
 
-    const activeEntry = { source, gain };
+    const activeEntry = { source, gain, panner };
     this.activeSources.add(activeEntry);
 
     source.onended = () => {
       source.disconnect();
       gain.disconnect();
+      panner.disconnect();
       this.activeSources.delete(activeEntry);
     };
 
@@ -145,7 +170,7 @@ export class AudioManager {
   }
 
   stopAll() {
-    this.activeSources.forEach(({ source, gain }) => {
+    this.activeSources.forEach(({ source, gain, panner }) => {
       try {
         source.stop();
       } catch {
@@ -154,6 +179,7 @@ export class AudioManager {
 
       source.disconnect();
       gain.disconnect();
+      panner.disconnect();
     });
 
     this.activeSources.clear();
@@ -194,7 +220,8 @@ export class AudioManager {
       return;
     }
 
-    const uniquePaths = [...new Set(Object.values(SOUND_BANK).flatMap(({ paths }) => paths))];
+    const uniquePaths = [...new Set(Object.values(SOUND_BANK).flatMap(({ paths }) => paths))]
+      .filter((path) => !this.buffers.has(path));
 
     this.loadingPromise = Promise.allSettled(
       uniquePaths.map(async (path) => {
@@ -214,6 +241,8 @@ export class AudioManager {
           console.warn(`Unable to load audio asset: ${uniquePaths[index]}`, result.reason);
         }
       });
+    }).finally(() => {
+      this.loadingPromise = null;
     });
 
     return this.loadingPromise;
@@ -228,7 +257,7 @@ export class AudioManager {
   getRunningContext() {
     const context = this.getContext();
 
-    if (!context || context.state !== "running") {
+    if (this.paused || !context || context.state !== "running") {
       return null;
     }
 
@@ -240,16 +269,27 @@ export class AudioManager {
       return this.context;
     }
 
-    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    const AudioContextClass = globalThis.AudioContext || globalThis.webkitAudioContext;
 
     if (!AudioContextClass) {
       return null;
     }
 
-    this.context = new AudioContextClass();
+    try {
+      this.context = new AudioContextClass();
+    } catch {
+      return null;
+    }
     this.masterGain = this.context.createGain();
-    this.masterGain.gain.value = 0.8;
-    this.masterGain.connect(this.context.destination);
+    this.masterGain.gain.value = 0.65;
+    const compressor = this.context.createDynamicsCompressor();
+    compressor.threshold.value = -12;
+    compressor.knee.value = 6;
+    compressor.ratio.value = 12;
+    compressor.attack.value = 0.003;
+    compressor.release.value = 0.12;
+    this.masterGain.connect(compressor);
+    compressor.connect(this.context.destination);
 
     return this.context;
   }
